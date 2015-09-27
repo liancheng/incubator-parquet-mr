@@ -1,4 +1,4 @@
-/* 
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -6,9 +6,9 @@
  * to you under the Apache License, Version 2.0 (the
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
- * 
+ *
  *   http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing,
  * software distributed under the License is distributed on an
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
@@ -34,6 +34,7 @@ import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.Option;
 import org.apache.commons.cli.OptionBuilder;
 import org.apache.commons.cli.Options;
+import org.apache.commons.codec.binary.Hex;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 
@@ -86,9 +87,14 @@ public class DumpCommand extends ArgsOnlyCommand {
                                  .hasArgs()
                                  .create('c');
 
+        Option hb = OptionBuilder.withLongOpt("hex-binary")
+                                 .withDescription("Dump binary and fixed-length byte array columns in hex numbers")
+                                 .create('b');
+
         OPTIONS.addOption(md);
         OPTIONS.addOption(dt);
         OPTIONS.addOption(cl);
+        OPTIONS.addOption(hb);
     }
 
     public DumpCommand() {
@@ -129,6 +135,7 @@ public class DumpCommand extends ArgsOnlyCommand {
 
         boolean showmd = !options.hasOption('m');
         boolean showdt = !options.hasOption('d');
+        boolean hexbin = options.hasOption('b');
 
         Set<String> showColumns = null;
         if (options.hasOption('c')) {
@@ -136,10 +143,10 @@ public class DumpCommand extends ArgsOnlyCommand {
             showColumns = new HashSet<String>(Arrays.asList(cols));
         }
 
-        dump(out, metaData, schema, inpath, showmd, showdt, showColumns);
+        dump(out, metaData, schema, inpath, showmd, showdt, hexbin, showColumns);
     }
 
-    public static void dump(PrettyPrintWriter out, ParquetMetadata meta, MessageType schema, Path inpath, boolean showmd, boolean showdt, Set<String> showColumns) throws IOException {
+    public static void dump(PrettyPrintWriter out, ParquetMetadata meta, MessageType schema, Path inpath, boolean showmd, boolean showdt, boolean hexbin, Set<String> showColumns) throws IOException {
         Configuration conf = new Configuration();
 
         List<BlockMetaData> blocks = meta.getBlocks();
@@ -219,7 +226,7 @@ public class DumpCommand extends ArgsOnlyCommand {
                         ColumnReadStoreImpl crstore = new ColumnReadStoreImpl(
                             store, new DumpGroupConverter(), schema,
                             meta.getFileMetaData().getCreatedBy());
-                        dump(out, crstore, column, page++, total, offset);
+                        dump(out, crstore, column, page++, total, offset, hexbin);
 
                         offset += store.getRowCount();
                         store = freader.readNextRowGroup();
@@ -236,7 +243,7 @@ public class DumpCommand extends ArgsOnlyCommand {
         }
     }
 
-    public static void dump(final PrettyPrintWriter out, PageReadStore store, ColumnDescriptor column) throws IOException {
+    private static void dump(final PrettyPrintWriter out, PageReadStore store, ColumnDescriptor column) throws IOException {
         PageReader reader = store.getPageReader(column);
 
         long vc = reader.getTotalValueCount();
@@ -280,7 +287,7 @@ public class DumpCommand extends ArgsOnlyCommand {
         }
     }
 
-    public static void dump(PrettyPrintWriter out, ColumnReadStoreImpl crstore, ColumnDescriptor column, long page, long total, long offset) throws IOException {
+    private static void dump(PrettyPrintWriter out, ColumnReadStoreImpl crstore, ColumnDescriptor column, long page, long total, long offset, boolean hexbin) throws IOException {
         int dmax = column.getMaxDefinitionLevel();
         ColumnReader creader = crstore.getColumnReader(column);
         out.format("*** row group %d of %d, values %d to %d ***%n", page, total, offset, offset + creader.getTotalValueCount() - 1);
@@ -292,14 +299,14 @@ public class DumpCommand extends ArgsOnlyCommand {
             out.format("value %d: R:%d D:%d V:", offset+i, rlvl, dlvl);
             if (dlvl == dmax) {
                 switch (column.getType()) {
-                case BINARY:  out.format("%s", binaryToString(creader.getBinary())); break;
+                case BINARY:  out.format("%s", binaryToString(creader.getBinary(), hexbin)); break;
                 case BOOLEAN: out.format("%s", creader.getBoolean()); break;
                 case DOUBLE:  out.format("%s", creader.getDouble()); break;
                 case FLOAT:   out.format("%s", creader.getFloat()); break;
                 case INT32:   out.format("%s", creader.getInteger()); break;
                 case INT64:   out.format("%s", creader.getLong()); break;
                 case INT96:   out.format("%s", binaryToBigInteger(creader.getBinary())); break;
-                case FIXED_LEN_BYTE_ARRAY: out.format("%s", binaryToString(creader.getBinary())); break;
+                case FIXED_LEN_BYTE_ARRAY: out.format("%s", binaryToString(creader.getBinary(), hexbin)); break;
                 }
             } else {
                 out.format("<null>");
@@ -310,14 +317,18 @@ public class DumpCommand extends ArgsOnlyCommand {
         }
     }
 
-    public static String binaryToString(Binary value) {
+    private static String binaryToString(Binary value, boolean hexbin) {
         byte[] data = value.getBytesUnsafe();
         if (data == null) return null;
 
         try {
-            CharBuffer buffer = UTF8_DECODER.decode(value.toByteBuffer());
-            return buffer.toString();
-        } catch (Throwable th) {
+            if (hexbin) {
+                return "<" + new String(Hex.encodeHex(data)) + ">";
+            } else {
+                CharBuffer buffer = UTF8_DECODER.decode(value.toByteBuffer());
+                return buffer.toString();
+            }
+        } catch (Throwable ignored) {
         }
 
         return "<bytes...>";
