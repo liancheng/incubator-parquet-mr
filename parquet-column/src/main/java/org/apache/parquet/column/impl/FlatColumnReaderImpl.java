@@ -57,7 +57,7 @@ import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeNameConverter;
  * @author Julien Le Dem
  *
  */
-public class ColumnReaderImpl implements ColumnReader {
+public class FlatColumnReaderImpl implements ColumnReader {
   private static final Log LOG = Log.getLog(ColumnReaderImpl.class);
 
   /**
@@ -139,12 +139,10 @@ public class ColumnReaderImpl implements ColumnReader {
   private final PageReader pageReader;
   private final Dictionary dictionary;
 
-  private IntIterator repetitionLevelColumn;
   private IntIterator definitionLevelColumn;
   protected ValuesReader dataColumn;
   private Encoding currentEncoding;
 
-  private int repetitionLevel;
   private int definitionLevel;
   private int dictionaryId;
 
@@ -332,7 +330,7 @@ public class ColumnReaderImpl implements ColumnReader {
    * @param path the descriptor for the corresponding column
    * @param pageReader the underlying store to read from
    */
-  public ColumnReaderImpl(ColumnDescriptor path, PageReader pageReader, PrimitiveConverter converter, ParsedVersion writerVersion) {
+  public FlatColumnReaderImpl(ColumnDescriptor path, PageReader pageReader, PrimitiveConverter converter, ParsedVersion writerVersion, boolean allFieldsRequired) {
     this.path = checkNotNull(path, "path");
     this.pageReader = checkNotNull(pageReader, "pageReader");
     this.converter = checkNotNull(converter, "converter");
@@ -443,7 +441,7 @@ public class ColumnReaderImpl implements ColumnReader {
    */
   @Override
   public int getCurrentRepetitionLevel() {
-    return repetitionLevel;
+    return 0;
   }
 
   /**
@@ -477,7 +475,7 @@ public class ColumnReaderImpl implements ColumnReader {
                         "%d, definition level: %d",
                     path, readValues, totalValueCount,
                     readValues - (endOfPageValueCount - pageValueCount),
-                    pageValueCount, repetitionLevel, definitionLevel),
+                    pageValueCount, 0, definitionLevel),
                 e));
       }
       throw new ParquetDecodingException(
@@ -486,7 +484,7 @@ public class ColumnReaderImpl implements ColumnReader {
                   "%d, definition level: %d",
               path, readValues, totalValueCount,
               readValues - (endOfPageValueCount - pageValueCount),
-              pageValueCount, repetitionLevel, definitionLevel),
+              pageValueCount, 0, definitionLevel),
           e);
     }
   }
@@ -513,8 +511,7 @@ public class ColumnReaderImpl implements ColumnReader {
   }
 
   // TODO: change the logic around read() to not tie together reading from the 3 columns
-  private void readRepetitionAndDefinitionLevels() {
-    repetitionLevel = repetitionLevelColumn.nextInt();
+  private void readDefinitionLevel() {
     definitionLevel = definitionLevelColumn.nextInt();
     ++readValues;
   }
@@ -523,12 +520,11 @@ public class ColumnReaderImpl implements ColumnReader {
     if (isPageFullyConsumed()) {
       if (isFullyConsumed()) {
         if (DEBUG) LOG.debug("end reached");
-        repetitionLevel = 0; // the next repetition level
         return;
       }
       readPage();
     }
-    readRepetitionAndDefinitionLevels();
+    readDefinitionLevel();
   }
 
   private void readPage() {
@@ -585,7 +581,6 @@ public class ColumnReaderImpl implements ColumnReader {
   private void readPageV1(DataPageV1 page) {
     ValuesReader rlReader = page.getRlEncoding().getValuesReader(path, REPETITION_LEVEL);
     ValuesReader dlReader = page.getDlEncoding().getValuesReader(path, DEFINITION_LEVEL);
-    this.repetitionLevelColumn = new ValuesReaderIntIterator(rlReader);
     this.definitionLevelColumn = new ValuesReaderIntIterator(dlReader);
     try {
       byte[] bytes = page.getBytes().toByteArray();
@@ -604,7 +599,6 @@ public class ColumnReaderImpl implements ColumnReader {
   }
 
   private void readPageV2(DataPageV2 page) {
-    this.repetitionLevelColumn = newRLEIterator(path.getMaxRepetitionLevel(), page.getRepetitionLevels());
     this.definitionLevelColumn = newRLEIterator(path.getMaxDefinitionLevel(), page.getDefinitionLevels());
     try {
       if (DEBUG) LOG.debug("page data size " + page.getData().size() + " bytes and " + pageValueCount + " records");

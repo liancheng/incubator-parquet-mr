@@ -1,4 +1,4 @@
-/* 
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -6,9 +6,9 @@
  * to you under the Apache License, Version 2.0 (the
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
- * 
+ *
  *   http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing,
  * software distributed under the License is distributed on an
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
@@ -47,6 +47,8 @@ public class ColumnReadStoreImpl implements ColumnReadStore {
   private final GroupConverter recordConverter;
   private final MessageType schema;
   private final ParsedVersion writerVersion;
+  private boolean hasFlatSchema;
+  private boolean allFieldsRequired;
 
   /**
    * @param pageReadStore underlying page storage
@@ -61,6 +63,19 @@ public class ColumnReadStoreImpl implements ColumnReadStore {
     this.recordConverter = recordConverter;
     this.schema = schema;
 
+    this.hasFlatSchema = true;
+    this.allFieldsRequired = true;
+
+    for (int i = 0; i < schema.getFieldCount(); i += 1) {
+      Type field = schema.getFields().get(i);
+      if (!field.isPrimitive() || field.isRepetition(Type.Repetition.REPEATED)) {
+        this.hasFlatSchema = false;
+      }
+      if (!field.isRepetition(Type.Repetition.REQUIRED)) {
+        this.allFieldsRequired = false;
+      }
+    }
+
     ParsedVersion version;
     try {
       version = VersionParser.parse(createdBy);
@@ -74,12 +89,21 @@ public class ColumnReadStoreImpl implements ColumnReadStore {
 
   @Override
   public ColumnReader getColumnReader(ColumnDescriptor path) {
-    return newMemColumnReader(path, pageReadStore.getPageReader(path));
+    if (hasFlatSchema) {
+      return newFlatMemColumnReader(path, pageReadStore.getPageReader(path), allFieldsRequired);
+    } else {
+      return newMemColumnReader(path, pageReadStore.getPageReader(path));
+    }
   }
 
   private ColumnReaderImpl newMemColumnReader(ColumnDescriptor path, PageReader pageReader) {
     PrimitiveConverter converter = getPrimitiveConverter(path);
     return new ColumnReaderImpl(path, pageReader, converter, writerVersion);
+  }
+
+  private FlatColumnReaderImpl newFlatMemColumnReader(ColumnDescriptor path, PageReader pageReader, boolean allFieldsRequired) {
+    PrimitiveConverter converter = getPrimitiveConverter(path);
+    return new FlatColumnReaderImpl(path, pageReader, converter, writerVersion, allFieldsRequired);
   }
 
   private PrimitiveConverter getPrimitiveConverter(ColumnDescriptor path) {
@@ -91,8 +115,6 @@ public class ColumnReadStoreImpl implements ColumnReadStore {
       currentType = groupType.getType(fieldName);
       currentConverter = currentConverter.asGroupConverter().getConverter(fieldIndex);
     }
-    PrimitiveConverter converter = currentConverter.asPrimitiveConverter();
-    return converter;
+    return currentConverter.asPrimitiveConverter();
   }
-
 }
