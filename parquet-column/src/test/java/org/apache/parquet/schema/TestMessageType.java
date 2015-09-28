@@ -1,4 +1,4 @@
-/* 
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -6,9 +6,9 @@
  * to you under the Apache License, Version 2.0 (the
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
- * 
+ *
  *   http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing,
  * software distributed under the License is distributed on an
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
@@ -18,6 +18,7 @@
  */
 package org.apache.parquet.schema;
 
+import static org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 import static org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName.BINARY;
@@ -26,13 +27,18 @@ import static org.apache.parquet.schema.Type.Repetition.OPTIONAL;
 import static org.apache.parquet.schema.Type.Repetition.REPEATED;
 import static org.apache.parquet.schema.Type.Repetition.REQUIRED;
 
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.ExpectedException;
 
 import org.apache.parquet.example.Paper;
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName;
 
 
 public class TestMessageType {
+  @Rule
+  public ExpectedException thrown = ExpectedException.none();
+
   @Test
   public void test() throws Exception {
     MessageType schema = MessageTypeParser.parseMessageType(Paper.schema.toString());
@@ -146,4 +152,128 @@ public class TestMessageType {
     assertEquals(schema.toString(), schema2.toString());
   }
 
+  @Test
+  public void testStrictDecimalUnion() {
+    MessageType t1 = Types.buildMessage()
+        .addField(
+            Types.required(INT32)
+                .as(OriginalType.DECIMAL)
+                .precision(7)
+                .scale(2)
+                .named("f"))
+        .named("root");
+
+    assertEquals(t1, t1.union(t1, true));
+
+    MessageType t2 = Types.buildMessage()
+        .addField(
+            Types.required(INT32)
+                .as(OriginalType.DECIMAL)
+                .precision(7)
+                .scale(3)
+                .named("f"))
+        .named("root");
+
+    thrown.expect(IncompatibleSchemaModificationException.class);
+    t1.union(t2);
+
+    MessageType t3 = Types.buildMessage()
+        .addField(Types.required(INT32).named("f"))
+        .named("root");
+
+    assertEquals(t1, t1.union(t3));
+    assertEquals(t3, t3.union(t3));
+
+    thrown.expect(IncompatibleSchemaModificationException.class);
+    t1.union(t3);
+  }
+
+  @Test
+  public void testNonStrictDecimalUnion() {
+    MessageType t1 = Types.buildMessage()
+        .addField(
+            Types.required(INT32)
+                .as(OriginalType.DECIMAL)
+                .precision(7)
+                .scale(2)
+                .named("f"))
+        .named("root");
+
+    MessageType t2 = Types.buildMessage()
+        .addField(
+            Types.required(FIXED_LEN_BYTE_ARRAY)
+                .length(4)
+                .as(OriginalType.DECIMAL)
+                .precision(7)
+                .scale(2)
+                .named("f"))
+        .named("root");
+
+    assertEquals(t1, t1.union(t2, false));
+
+    MessageType t3 = Types.buildMessage()
+        .addField(
+            Types.required(FIXED_LEN_BYTE_ARRAY)
+                .length(4)
+                .as(OriginalType.DECIMAL)
+                .precision(9)
+                .scale(0)
+                .named("f"))
+        .named("root");
+
+    thrown.expect(IncompatibleSchemaModificationException.class);
+    t1.union(t3, false);
+  }
+
+  @Test
+  public void testPrimitiveTypeUnionWithDifferentOriginalTypes() {
+    MessageType t1 = Types.buildMessage()
+        .addField(
+            Types.required(INT32)
+                .as(OriginalType.DECIMAL)
+                .precision(7)
+                .scale(2)
+                .named("f"))
+        .named("root");
+
+    MessageType t2 = Types.buildMessage()
+        .addField(
+            Types.required(INT32)
+                .as(OriginalType.UINT_32)
+                .named("f"))
+        .named("root");
+
+    MessageType expected = Types.buildMessage()
+        .addField(Types.required(INT32).named("f"))
+        .named("root");
+
+    assertEquals(expected, t1.union(t2));
+  }
+
+  @Test
+  public void testFixedLenByteArrayUnion() {
+    MessageType t1 = Types.buildMessage()
+        .addField(
+            Types.required(FIXED_LEN_BYTE_ARRAY)
+                .length(10)
+                .named("f"))
+        .named("root");
+
+    // Strict union
+    assertEquals(t1, t1.union(t1));
+
+    MessageType t2 = Types.buildMessage()
+        .addField(
+            Types.required(FIXED_LEN_BYTE_ARRAY)
+                .length(5)
+                .named("f"))
+        .named("root");
+
+    // Non-strict union
+    assertEquals(t1, t1.union(t2, false));
+
+    // Strict union
+    thrown.expect(IncompatibleSchemaModificationException.class);
+    t1.union(t2);
+  }
 }
