@@ -1,4 +1,4 @@
-/* 
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -6,9 +6,9 @@
  * to you under the Apache License, Version 2.0 (the
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
- * 
+ *
  *   http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing,
  * software distributed under the License is distributed on an
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
@@ -387,41 +387,153 @@ class RecordReaderImplementation<T> extends RecordReader<T> {
    */
   @Override
   public T read() {
-    int currentLevel = 0;
-    recordRootConverter.start();
-    State currentState = states[0];
-    do {
-      ColumnReader columnReader = currentState.column;
-      int d = columnReader.getCurrentDefinitionLevel();
-      // creating needed nested groups until the current field (opening tags)
-      int depth = currentState.definitionLevelToDepth[d];
-      for (; currentLevel <= depth; ++currentLevel) {
-        currentState.groupConverterPath[currentLevel].start();
-      }
-      // currentLevel = depth + 1 at this point
-      // set the current value
-      if (d >= currentState.maxDefinitionLevel) {
-        // not null
-        columnReader.writeCurrentValueToConverter();
-      }
-      columnReader.consume();
+    ColumnReader reader;
 
-      int nextR = currentState.maxRepetitionLevel == 0 ? 0 : columnReader.getCurrentRepetitionLevel();
-      // level to go to close current groups
-      int next = currentState.nextLevel[nextR];
-      for (; currentLevel > next; currentLevel--) {
-        currentState.groupConverterPath[currentLevel - 1].end();
+    {
+      reader = columnReaders[0];
+      if (reader.getCurrentDefinitionLevel() != 0) {
+        reader.getInteger();
       }
+      reader.consume();
 
-      currentState = currentState.nextState[nextR];
-    } while (currentState != null);
-    recordRootConverter.end();
-    T record = recordMaterializer.getCurrentRecord();
-    shouldSkipCurrentRecord = record == null;
-    if (shouldSkipCurrentRecord) {
-      recordMaterializer.skipCurrentRecord();
+      reader = columnReaders[1];
+      if (reader.getCurrentDefinitionLevel() != 0) {
+        reader.getInteger();
+      }
+      reader.consume();
+
+      reader = columnReaders[2];
+      if (reader.getCurrentDefinitionLevel() != 0) {
+        reader.getInteger();
+      }
+      reader.consume();
+
+      reader = columnReaders[3];
+      if (reader.getCurrentDefinitionLevel() != 0) {
+        reader.getInteger();
+      }
+      reader.consume();
+
+      reader = columnReaders[4];
+      if (reader.getCurrentDefinitionLevel() != 0) {
+        reader.getInteger();
+      }
+      reader.consume();
+
+      reader = columnReaders[5];
+      if (reader.getCurrentDefinitionLevel() != 0) {
+        reader.getInteger();
+      }
+      reader.consume();
+
+      reader = columnReaders[6];
+      if (reader.getCurrentDefinitionLevel() != 0) {
+        reader.getInteger();
+      }
+      reader.consume();
+
+      reader = columnReaders[7];
+      if (reader.getCurrentDefinitionLevel() != 0) {
+        reader.getInteger();
+      }
+      reader.consume();
+
+      reader = columnReaders[8];
+      if (reader.getCurrentDefinitionLevel() != 0) {
+        reader.getInteger();
+      }
+      reader.consume();
+
+      reader = columnReaders[9];
+      if (reader.getCurrentDefinitionLevel() != 0) {
+        reader.getInteger();
+      }
+      reader.consume();
     }
-    return record;
+
+    {
+      reader = columnReaders[10];
+      if (reader.getCurrentDefinitionLevel() != 0) {
+        reader.getBinary();
+      }
+      reader.consume();
+
+      reader = columnReaders[11];
+      if (reader.getCurrentDefinitionLevel() != 0) {
+        reader.getBinary();
+      }
+      reader.consume();
+
+      reader = columnReaders[12];
+      if (reader.getCurrentDefinitionLevel() != 0) {
+        reader.getBinary();
+      }
+      reader.consume();
+
+      reader = columnReaders[13];
+      if (reader.getCurrentDefinitionLevel() != 0) {
+        reader.getBinary();
+      }
+      reader.consume();
+
+      reader = columnReaders[14];
+      if (reader.getCurrentDefinitionLevel() != 0) {
+        reader.getBinary();
+      }
+      reader.consume();
+
+      reader = columnReaders[15];
+      if (reader.getCurrentDefinitionLevel() != 0) {
+        reader.getBinary();
+      }
+      reader.consume();
+
+      reader = columnReaders[16];
+      if (reader.getCurrentDefinitionLevel() != 0) {
+        reader.getBinary();
+      }
+      reader.consume();
+
+      reader = columnReaders[17];
+      if (reader.getCurrentDefinitionLevel() != 0) {
+        reader.getBinary();
+      }
+      reader.consume();
+
+      reader = columnReaders[18];
+      if (reader.getCurrentDefinitionLevel() != 0) {
+        reader.getBinary();
+      }
+      reader.consume();
+
+      reader = columnReaders[19];
+      if (reader.getCurrentDefinitionLevel() != 0) {
+        reader.getBinary();
+      }
+      reader.consume();
+
+      reader = columnReaders[20];
+      if (reader.getCurrentDefinitionLevel() != 0) {
+        reader.getBinary();
+      }
+      reader.consume();
+
+      reader = columnReaders[21];
+      if (reader.getCurrentDefinitionLevel() != 0) {
+        reader.getBinary();
+      }
+      reader.consume();
+    }
+
+    {
+      reader = columnReaders[22];
+      if (reader.getCurrentDefinitionLevel() != 0) {
+        reader.getInteger();
+      }
+      reader.consume();
+    }
+
+    return recordMaterializer.getCurrentRecord();
   }
 
   @Override
