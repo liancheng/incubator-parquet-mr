@@ -117,15 +117,24 @@ public class VectorizedReadBenchmarks {
     @Benchmark
     public void readAllPrimitives(Blackhole blackhole) throws IOException
     {
+      int int32Index = 0;
+      int int64Index = 1;
+      int booleanIndex = 2;
+      int floatIndex = 3;
+      int doubleIndex = 4;
+      int flbaIndex = 5;
+      int int96Index = 6;
+
       Group group;
+
       while ((group = allPrimitivesReader.read()) != null) {
-        blackhole.consume(group.getInteger("int32_field", 0));
-        blackhole.consume(group.getLong("int64_field", 0));
-        blackhole.consume(group.getBoolean("boolean_field", 0));
-        blackhole.consume(group.getFloat("float_field", 0));
-        blackhole.consume(group.getDouble("double_field", 0));
-        blackhole.consume(group.getBinary("flba_field", 0));
-        blackhole.consume(group.getInt96("int96_field", 0));
+        blackhole.consume(group.getInteger(int32Index, 0));
+        blackhole.consume(group.getLong(int64Index, 0));
+        blackhole.consume(group.getBoolean(booleanIndex, 0));
+        blackhole.consume(group.getFloat(floatIndex, 0));
+        blackhole.consume(group.getDouble(doubleIndex, 0));
+        blackhole.consume(group.getBinary(flbaIndex, 0));
+        blackhole.consume(group.getInt96(int96Index, 0));
       }
     }
 
@@ -166,9 +175,10 @@ public class VectorizedReadBenchmarks {
     @Benchmark
     public void readOnePrimitive(Blackhole blackhole) throws IOException
     {
+      int int32Index = 0;
       Group group;
       while ((group = onePrimitiveReader.read()) != null) {
-        blackhole.consume(group.getInteger("int32_field", 0));
+        blackhole.consume(group.getInteger(int32Index, 0));
       }
     }
 
@@ -203,12 +213,16 @@ public class VectorizedReadBenchmarks {
     @Benchmark
     public void readFourPrimitives(Blackhole blackhole) throws IOException
     {
+      int int32Index = 0;
+      int int64Index = 1;
+      int booleanIndex = 2;
+      int floatIndex = 3;
       Group group;
       while ((group = fourPrimitivesReader.read()) != null) {
-        blackhole.consume(group.getInteger("int32_field", 0));
-        blackhole.consume(group.getLong("int64_field", 0));
-        blackhole.consume(group.getBoolean("boolean_field", 0));
-        blackhole.consume(group.getFloat("float_field", 0));
+        blackhole.consume(group.getInteger(int32Index, 0));
+        blackhole.consume(group.getLong(int64Index, 0));
+        blackhole.consume(group.getBoolean(booleanIndex, 0));
+        blackhole.consume(group.getFloat(floatIndex, 0));
       }
     }
 

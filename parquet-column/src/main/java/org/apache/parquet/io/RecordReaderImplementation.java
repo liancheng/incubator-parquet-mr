@@ -1,4 +1,4 @@
-/* 
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -6,9 +6,9 @@
  * to you under the Apache License, Version 2.0 (the
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
- * 
+ *
  *   http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing,
  * software distributed under the License is distributed on an
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
@@ -35,8 +35,6 @@ import org.apache.parquet.io.api.GroupConverter;
 import org.apache.parquet.io.api.PrimitiveConverter;
 import org.apache.parquet.io.api.RecordConsumer;
 import org.apache.parquet.io.api.RecordMaterializer;
-import org.apache.parquet.schema.MessageType;
-import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName;
 import org.apache.parquet.io.vector.BooleanColumnVector;
 import org.apache.parquet.io.vector.ByteColumnVector;
 import org.apache.parquet.io.vector.DoubleColumnVector;
@@ -44,6 +42,8 @@ import org.apache.parquet.io.vector.FloatColumnVector;
 import org.apache.parquet.io.vector.IntColumnVector;
 import org.apache.parquet.io.vector.LongColumnVector;
 import org.apache.parquet.io.vector.ObjectColumnVector;
+import org.apache.parquet.schema.MessageType;
+import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName;
 
 import static org.apache.parquet.Log.DEBUG;
 
@@ -448,7 +448,33 @@ class RecordReaderImplementation<T> extends RecordReader<T> {
       for (int i = 0 ; i < columnSchemas.length; i++) {
         MessageType schema  = columnSchemas[i];
         State state = getState(schema);
-        readVector(state.column, vectors[i], current, total);
+
+        switch (state.column.getDescriptor().getType()) {
+          case BOOLEAN:
+            readBooleanVector(state.column, (BooleanColumnVector) vectors[i], current, total);
+            break;
+
+          case DOUBLE:
+            readDoubleVector(state.column, (DoubleColumnVector) vectors[i], current, total);
+            break;
+
+          case FLOAT:
+            readFloatVector(state.column, (FloatColumnVector) vectors[i], current, total);
+            break;
+
+          case INT32:
+            readIntVector(state.column, (IntColumnVector) vectors[i], current, total);
+            break;
+
+          case INT64:
+            readLongVector(state.column, (LongColumnVector) vectors[i], current, total);
+            break;
+
+          case INT96:
+          case FIXED_LEN_BYTE_ARRAY:
+            readBinaryVector(state.column, (ByteColumnVector) vectors[i], current, total);
+            break;
+        }
       }
   }
 
@@ -458,7 +484,7 @@ class RecordReaderImplementation<T> extends RecordReader<T> {
     for ( ; index < ColumnVector.DEFAULT_VECTOR_LENGTH; index++, current++) {
 
       if (current >= total) {
-        ((ColumnVector) vector).setNumberOfValues(index);
+        vector.setNumberOfValues(index);
         return;
       }
 
@@ -473,54 +499,135 @@ class RecordReaderImplementation<T> extends RecordReader<T> {
       vector.values[index] = record;
     }
 
-    ((ColumnVector) vector).setNumberOfValues(index);
+    vector.setNumberOfValues(index);
   }
 
-  private void readVector(ColumnReader reader, ColumnVector vector, long current, long total) {
+  private void readBooleanVector(ColumnReader reader, BooleanColumnVector vector, long current, long total) {
     ColumnDescriptor column = reader.getDescriptor();
     int maxDefinitionLevel = column.getMaxDefinitionLevel();
-
     int index = 0;
-    int fixedLenByteArrayPosition = 0;
-    for ( ; index < ColumnVector.DEFAULT_VECTOR_LENGTH; index++, current++) {
 
+    for ( ; index < ColumnVector.DEFAULT_VECTOR_LENGTH; index++, current++) {
       if (current >= total) {
         vector.setNumberOfValues(index);
         return;
       }
 
       if (reader.getCurrentDefinitionLevel() == maxDefinitionLevel) {
-        switch (column.getType()) {
-          case BOOLEAN:
-            BooleanColumnVector booleanColumnVector = (BooleanColumnVector) vector;
-            booleanColumnVector.values[index] = reader.getBoolean();
-            break;
-          case DOUBLE:
-            DoubleColumnVector doubleColumnVector = (DoubleColumnVector) vector;
-            doubleColumnVector.values[index] = reader.getDouble();
-            break;
-          case FLOAT:
-            FloatColumnVector floatColumnVector = (FloatColumnVector) vector;
-            floatColumnVector.values[index] = reader.getFloat();
-            break;
-          case INT32:
-            IntColumnVector intColumnVector = (IntColumnVector) vector;
-            intColumnVector.values[index] = reader.getInteger();
-            break;
-          case INT64:
-            LongColumnVector longColumnVector = (LongColumnVector) vector;
-            longColumnVector.values[index] = reader.getLong();
-            break;
-          case INT96:
-          case FIXED_LEN_BYTE_ARRAY:
-            ByteColumnVector fixedLenVector = (ByteColumnVector) vector;
-            byte[] fixedLenBinary = reader.getBinary().getBytes();
-            System.arraycopy(fixedLenBinary, 0, fixedLenVector.values, fixedLenByteArrayPosition, fixedLenBinary.length);
-            fixedLenByteArrayPosition += fixedLenBinary.length;
-            break;
-          default:
-            throw new IllegalArgumentException("Unhandled column type " + column.getType());
-        }
+        vector.values[index] = reader.getBoolean();
+        vector.isNull[index] = false;
+      } else {
+        vector.isNull[index] = true;
+      }
+      reader.consume();
+    }
+    vector.setNumberOfValues(index);
+  }
+
+  private void readDoubleVector(ColumnReader reader, DoubleColumnVector vector, long current, long total) {
+    ColumnDescriptor column = reader.getDescriptor();
+    int maxDefinitionLevel = column.getMaxDefinitionLevel();
+    int index = 0;
+
+    for ( ; index < ColumnVector.DEFAULT_VECTOR_LENGTH; index++, current++) {
+      if (current >= total) {
+        vector.setNumberOfValues(index);
+        return;
+      }
+
+      if (reader.getCurrentDefinitionLevel() == maxDefinitionLevel) {
+        vector.values[index] = reader.getDouble();
+        vector.isNull[index] = false;
+      } else {
+        vector.isNull[index] = true;
+      }
+      reader.consume();
+    }
+    vector.setNumberOfValues(index);
+  }
+
+  private void readFloatVector(ColumnReader reader, FloatColumnVector vector, long current, long total) {
+    ColumnDescriptor column = reader.getDescriptor();
+    int maxDefinitionLevel = column.getMaxDefinitionLevel();
+    int index = 0;
+
+    for ( ; index < ColumnVector.DEFAULT_VECTOR_LENGTH; index++, current++) {
+      if (current >= total) {
+        vector.setNumberOfValues(index);
+        return;
+      }
+
+      if (reader.getCurrentDefinitionLevel() == maxDefinitionLevel) {
+        vector.values[index] = reader.getFloat();
+        vector.isNull[index] = false;
+      } else {
+        vector.isNull[index] = true;
+      }
+      reader.consume();
+    }
+    vector.setNumberOfValues(index);
+  }
+
+  private void readIntVector(ColumnReader reader, IntColumnVector vector, long current, long total) {
+    ColumnDescriptor column = reader.getDescriptor();
+    int maxDefinitionLevel = column.getMaxDefinitionLevel();
+    int index = 0;
+
+    for ( ; index < ColumnVector.DEFAULT_VECTOR_LENGTH; index++, current++) {
+      if (current >= total) {
+        vector.setNumberOfValues(index);
+        return;
+      }
+
+      if (reader.getCurrentDefinitionLevel() == maxDefinitionLevel) {
+        vector.values[index] = reader.getInteger();
+        vector.isNull[index] = false;
+      } else {
+        vector.isNull[index] = true;
+      }
+      reader.consume();
+    }
+    vector.setNumberOfValues(index);
+  }
+
+  private void readLongVector(ColumnReader reader, LongColumnVector vector, long current, long total) {
+    ColumnDescriptor column = reader.getDescriptor();
+    int maxDefinitionLevel = column.getMaxDefinitionLevel();
+    int index = 0;
+
+    for ( ; index < ColumnVector.DEFAULT_VECTOR_LENGTH; index++, current++) {
+      if (current >= total) {
+        vector.setNumberOfValues(index);
+        return;
+      }
+
+      if (reader.getCurrentDefinitionLevel() == maxDefinitionLevel) {
+        vector.values[index] = reader.getLong();
+        vector.isNull[index] = false;
+      } else {
+        vector.isNull[index] = true;
+      }
+      reader.consume();
+    }
+    vector.setNumberOfValues(index);
+  }
+
+  private void readBinaryVector(ColumnReader reader, ByteColumnVector vector, long current, long total) {
+    ColumnDescriptor column = reader.getDescriptor();
+    int maxDefinitionLevel = column.getMaxDefinitionLevel();
+    int fixedLenByteArrayPosition = 0;
+    int index = 0;
+
+    for ( ; index < ColumnVector.DEFAULT_VECTOR_LENGTH; index++, current++) {
+      if (current >= total) {
+        vector.setNumberOfValues(index);
+        return;
+      }
+
+      if (reader.getCurrentDefinitionLevel() == maxDefinitionLevel) {
+        byte[] fixedLenBinary = reader.getBinary().getBytes();
+        System.arraycopy(fixedLenBinary, 0, vector.values, fixedLenByteArrayPosition, fixedLenBinary.length);
+        fixedLenByteArrayPosition += fixedLenBinary.length;
         vector.isNull[index] = false;
       } else {
         vector.isNull[index] = true;

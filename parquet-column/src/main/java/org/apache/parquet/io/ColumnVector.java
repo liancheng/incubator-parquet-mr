@@ -51,8 +51,7 @@ public abstract class ColumnVector
     return numValues;
   }
 
-  void setNumberOfValues(int numValues)
-  {
+  public void setNumberOfValues(int numValues) {
     this.numValues = numValues;
   }
 
